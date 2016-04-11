@@ -56,6 +56,11 @@ PKG_PATCHES=(
 			echo "mingw-w64/6390.patch"; \
 		} \
 	)
+	$(
+	  [[ $RUNTIME_VERSION == v4 ]] && { \
+	    echo "mingw-w64/make-messageboxw-optional.patch"; \
+	  } \
+	)
 )
 
 #

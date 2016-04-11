@@ -1,0 +1,74 @@
+From 76ac6afc4f99d8d0ac63f6119efaa439a0dc1fec Mon Sep 17 00:00:00 2001
+From: Michael Smith <michael.smith@puppetlabs.com>
+Date: Fri, 25 Mar 2016 17:48:38 -0700
+Subject: [PATCH] Make MessageBoxW optional
+
+Necessary to run C++ applications on Nano Server.
+---
+ mingw-w64-crt/libsrc/dxerr.c    |  2 +-
+ mingw-w64-crt/libsrc/scrnsave.c |  2 +-
+ mingw-w64-crt/misc/wassert.c    | 15 +++++++++++++--
+ 3 files changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/mingw-w64-crt/libsrc/dxerr.c b/mingw-w64-crt/libsrc/dxerr.c
+index a328bcf..c8edbfd 100644
+--- a/mingw-w64-crt/libsrc/dxerr.c
++++ b/mingw-w64-crt/libsrc/dxerr.c
+@@ -766,7 +766,7 @@ HRESULT __stdcall DXTrace(char *strFile, DWORD dwLine, HRESULT hr,
+ 		   TEXT("File: %hs\nLine: %Lu\nError Code: %s(0x%Lx)\nCalling: %s\n"
+ 		   "Do you want to debug the application?"), strFile, dwLine,
+ 		   ErrorName, hr, (strMsg ? strMsg : TEXT("")));		
+-		Result = MessageBox(0, DebugMessage, TEXT("Unexpected error encountred"), MB_YESNO | MB_ICONERROR);
++		Result = IDYES; /*MessageBox(0, DebugMessage, TEXT("Unexpected error encountred"), MB_YESNO | MB_ICONERROR);*/
+ 		if (Result == IDYES)
+ 			DebugBreak();
+ 	}
+diff --git a/mingw-w64-crt/libsrc/scrnsave.c b/mingw-w64-crt/libsrc/scrnsave.c
+index 1cfd6e7..7098997 100644
+--- a/mingw-w64-crt/libsrc/scrnsave.c
++++ b/mingw-w64-crt/libsrc/scrnsave.c
+@@ -191,7 +191,7 @@ static int LaunchScreenSaver(HWND hParent)
+      library */
+   if (!RegisterClasses())
+     {
+-      MessageBox(NULL, TEXT("RegisterClasses() failed"), NULL, MB_ICONHAND);
++      /*MessageBox(NULL, TEXT("RegisterClasses() failed"), NULL, MB_ICONHAND);*/
+       goto restore;
+     }
+ 
+diff --git a/mingw-w64-crt/misc/wassert.c b/mingw-w64-crt/misc/wassert.c
+index 5b66fbd..873914a 100644
+--- a/mingw-w64-crt/misc/wassert.c
++++ b/mingw-w64-crt/misc/wassert.c
+@@ -11,6 +11,9 @@
+ 
+ extern int mingw_app_type;
+ 
++typedef int (WINAPI *MSGBOXPROC)(HWND, LPCTSTR, LPCTSTR, UINT);
++static MSGBOXPROC MessageBoxProc = NULL;
++
+ void __cdecl _wassert (const wchar_t *, const wchar_t *,unsigned);
+ void __cdecl _assert (const char *, const char *, unsigned);
+ 
+@@ -53,8 +56,16 @@ _wassert (const wchar_t *_Message, const wchar_t *_File, unsigned _Line)
+       fwprintf (stderr, L"%ws\n", msgbuf);
+       abort ();
+     }
+-  nCode = MessageBoxW (NULL, msgbuf, L"MinGW Runtime Assertion", MB_ABORTRETRYIGNORE|
+-    MB_ICONHAND|MB_SETFOREGROUND|MB_TASKMODAL);
++
++  // Load MessageBoxW dynamically, so the crt can be used on platforms without it
++  // i.e. Nano Server.
++  HINSTANCE dllHandle = LoadLibrary(TEXT("User32.dll"));
++  if (dllHandle)
++    MessageBoxProc = GetProcAddress(dllHandle, "MessageBoxW");
++
++  if (MessageBoxProc)
++    nCode = MessageBoxProc (NULL, msgbuf, L"MinGW Runtime Assertion", MB_ABORTRETRYIGNORE|
++      MB_ICONHAND|MB_SETFOREGROUND|MB_TASKMODAL);
+   if (nCode == IDABORT)
+     {
+       raise (SIGABRT);
+-- 
+2.8.0
+
